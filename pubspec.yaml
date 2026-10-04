@@ -1,55 +1,30 @@
 name: just_inputs
-description: "A new Flutter package project."
-version: 0.0.1
-homepage:
+description: "Input actions for Flutter games: keyboard, mouse, gamepads and touch, with local multiplayer, player rebinding and on-screen controls."
+version: 0.1.0
+homepage: https://engine.justunknown.com/
+repository: https://github.com/just-unknown-dev/just-inputs
+issue_tracker: https://github.com/just-unknown-dev/just-inputs/issues
+topics:
+  - input
+  - gamepad
+  - keyboard
+  - gamedev
+  - game
 
 environment:
-  sdk: ^3.12.2
-  flutter: ">=1.17.0"
+  # Dart 3.12 for private named initializing formals (InputActions,
+  # RebindingOperation). Flutter 3.44 is the first stable release with it.
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  just_gamepads: ^0.0.1
+  just_gamepads: ^0.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
-
-  # To add assets to your package, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
-  #
-  # For details regarding assets in packages, see
-  # https://flutter.dev/to/asset-from-package
-  #
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
-
-  # To add custom fonts to your package, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts in packages, see
-  # https://flutter.dev/to/font-from-package
