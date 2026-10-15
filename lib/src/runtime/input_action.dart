@@ -778,4 +778,15 @@ abstract final class ActionBuilder {
 
   /// Stops [action] cleanly before its definition changes under it.
   static void retire(InputAction action) => action._disable();
+
+  /// [action]'s single-control bindings in use now, each as the controls it
+  /// resolved to and the processors it applies — for reading movement a
+  /// frame at a time (`FrameMotion`).
+  static Iterable<(List<InputControl>, List<ProcessorDef>)> controlBindings(
+    InputAction action,
+  ) sync* {
+    for (final s in action._slots) {
+      if (s.def is ControlBindingDef) yield (s.controls, s.def.processors);
+    }
+  }
 }

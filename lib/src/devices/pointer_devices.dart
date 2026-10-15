@@ -10,6 +10,8 @@ final class MouseState extends DeviceState<MouseState> {
     this.position = Offset.zero,
     this.delta = Offset.zero,
     this.scroll = Offset.zero,
+    this.travelled = Offset.zero,
+    this.scrolled = Offset.zero,
   });
 
   int buttons;
@@ -17,17 +19,32 @@ final class MouseState extends DeviceState<MouseState> {
   Offset delta;
   Offset scroll;
 
+  /// Every movement added up since the mouse was made — [delta] without the
+  /// reset at each update — for reading a frame at a time.
+  Offset travelled;
+
+  /// The same for the wheel.
+  Offset scrolled;
+
   @override
   MouseState copy() => MouseState(
     buttons: buttons,
     position: position,
     delta: delta,
     scroll: scroll,
+    travelled: travelled,
+    scrolled: scrolled,
   );
 }
 
 /// The mouse. [MouseControls.delta] and [MouseControls.scroll] add up what
-/// happened since the last update and start again from zero at each.
+/// happened since the last update and start again from zero at each; their
+/// running totals ([InputControl.readTotal]) never start again, for reading
+/// once per rendered frame instead.
+///
+/// Movement comes from Flutter's pointer events, or from outside them
+/// through [injectDelta] — a locked pointer's raw movement. While
+/// [relativeMode] is on, only the injected movement counts.
 final class MouseDevice extends StatefulDevice<MouseState> {
   MouseDevice({required super.deviceId})
     : super(
@@ -56,12 +73,14 @@ final class MouseDevice extends StatefulDevice<MouseState> {
       MouseControls.delta,
       (s) => (s as MouseState).delta,
       continuous: true,
+      total: (s) => (s as MouseState).travelled,
     ),
     ...vector2Controls(
       this,
       MouseControls.scroll,
       (s) => (s as MouseState).scroll,
       continuous: true,
+      total: (s) => (s as MouseState).scrolled,
     ),
   ];
 
@@ -75,19 +94,28 @@ final class MouseDevice extends StatefulDevice<MouseState> {
   @override
   InputControl? control(String name) => _byName[name];
 
+  /// Movement comes from [injectDelta] alone: the pointer is locked, its
+  /// cursor hidden and held in place, and the pointer events' own movement
+  /// (a hidden cursor nudged against its clip) would count it twice. Their
+  /// buttons and position still count. Off by default.
+  bool relativeMode = false;
+
   void handlePointerEvent(PointerEvent event) {
     if (event.kind != PointerDeviceKind.mouse) return;
     if (event is PointerScrollEvent) {
       // Flutter's wheel delta already points the world's way: rolling the
       // wheel away (up) is negative y.
       final d = event.scrollDelta;
-      queue((s) => s.scroll += d);
+      queue((s) {
+        s.scroll += d;
+        s.scrolled += d;
+      });
       return;
     }
     // Flutter reports the buttons still held; a cancel means none are.
     final buttons = event is PointerCancelEvent ? 0 : event.buttons;
     final position = event.localPosition;
-    final delta = event.localDelta;
+    final delta = relativeMode ? Offset.zero : event.localDelta;
     if (buttons == live.buttons &&
         position == live.position &&
         delta == Offset.zero) {
@@ -97,6 +125,21 @@ final class MouseDevice extends StatefulDevice<MouseState> {
       s.buttons = buttons;
       s.position = position;
       s.delta += delta;
+      s.travelled += delta;
+    });
+  }
+
+  /// Adds [delta] to the mouse's movement as though the pointer had moved:
+  /// raw movement from outside Flutter's pointer events, such as a locked
+  /// pointer's (`PointerLock`). `<Mouse>/delta` sees it at the next
+  /// update, and a frame-at-a-time read (`FrameMotion`) at once.
+  ///
+  /// `InputService.attachRawMouse` does this for a stream of them.
+  void injectDelta(Offset delta) {
+    if (delta == Offset.zero) return;
+    queue((s) {
+      s.delta += delta;
+      s.travelled += delta;
     });
   }
 
@@ -126,6 +169,7 @@ final class TouchState extends DeviceState<TouchState> {
     this.pointer,
     this.position = Offset.zero,
     this.delta = Offset.zero,
+    this.travelled = Offset.zero,
     Map<int, Offset>? touches,
   }) : touches = touches ?? {};
 
@@ -133,6 +177,10 @@ final class TouchState extends DeviceState<TouchState> {
   int? pointer;
   Offset position;
   Offset delta;
+
+  /// Every movement of the first finger added up since the screen was made
+  /// — [delta] without the reset at each update.
+  Offset travelled;
 
   /// Every finger down, by pointer id.
   final Map<int, Offset> touches;
@@ -142,6 +190,7 @@ final class TouchState extends DeviceState<TouchState> {
     pointer: pointer,
     position: position,
     delta: delta,
+    travelled: travelled,
     touches: {...touches},
   );
 }
@@ -175,6 +224,7 @@ final class TouchscreenDevice extends StatefulDevice<TouchState> {
       TouchscreenControls.delta,
       (s) => (s as TouchState).delta,
       continuous: true,
+      total: (s) => (s as TouchState).travelled,
     ),
   ];
 
@@ -211,6 +261,7 @@ final class TouchscreenDevice extends StatefulDevice<TouchState> {
           if (s.pointer == id) {
             s.position = at;
             s.delta += d;
+            s.travelled += d;
           }
         });
       case PointerUpEvent() || PointerCancelEvent():

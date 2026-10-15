@@ -11,6 +11,7 @@ import '../devices/on_screen_device.dart';
 import '../devices/pointer_devices.dart';
 import '../model/input_action_asset.dart';
 import '../players/player_input.dart';
+import '../pointer/pointer_lock.dart';
 import '../rebinding/binding_overrides.dart';
 import 'input_action.dart';
 import 'input_actions.dart';
@@ -30,7 +31,10 @@ typedef DeviceListener = void Function(InputDevice device, DeviceChange change);
 /// calls [update] once per fixed step with its own clock — nothing here
 /// reads the wall clock.
 class InputService {
-  InputService() {
+  /// A service with its own devices. [pointerLock] is the one
+  /// [InputService.pointerLock] hands out ([PointerLock.instance] when
+  /// null); a test gives its own.
+  InputService({PointerLock? pointerLock}) : _pointerLockGiven = pointerLock {
     keyboard = KeyboardDevice(deviceId: _nextId++);
     mouse = MouseDevice(deviceId: _nextId++);
     touchscreen = TouchscreenDevice(deviceId: _nextId++);
@@ -134,6 +138,77 @@ class InputService {
 
   /// The window lost the keyboard: every key held is let go.
   void releaseKeyboard() => keyboard.releaseAll();
+
+  final List<InputSubscription> _rawMouse = [];
+
+  /// Feeds raw mouse movement from outside Flutter's pointer events into
+  /// [mouse] — what [pointerLock] does with a locked pointer's:
+  ///
+  /// ```dart
+  /// input.attachRawMouse(lock.deltas, relative: lock.locked);
+  /// ```
+  ///
+  /// Each of [deltas] goes to [MouseDevice.injectDelta]. While [relative]
+  /// is true the mouse is in [MouseDevice.relativeMode], so the pointer
+  /// events' own movement does not count twice. Cancel the subscription to
+  /// stop; [dispose] does too.
+  InputSubscription attachRawMouse(
+    Stream<Offset> deltas, {
+    ValueListenable<bool>? relative,
+  }) {
+    final motion = deltas.listen(mouse.injectDelta);
+    void follow() => mouse.relativeMode = relative!.value;
+    if (relative != null) {
+      relative.addListener(follow);
+      follow();
+    }
+    late final InputSubscription subscription;
+    subscription = InputSubscription(() {
+      motion.cancel();
+      if (relative != null) {
+        relative.removeListener(follow);
+        mouse.relativeMode = false;
+      }
+      _rawMouse.remove(subscription);
+    });
+    _rawMouse.add(subscription);
+    return subscription;
+  }
+
+  // --- Pointer lock --------------------------------------------------------
+
+  /// Whether a press on the game takes hold of [pointerLock]: a game that
+  /// looks with the mouse sets it. `GameWidget` takes hold on a press on
+  /// the game, and the editor on a press on its play-test; Escape lets go.
+  bool lockPointerOnClick = false;
+
+  /// The app's pointer lock, its raw movement feeding [mouse] (in
+  /// [MouseDevice.relativeMode] while it holds). Made on first use: a game
+  /// that never asks for it never starts it.
+  PointerLock get pointerLock {
+    final made = _pointerLock;
+    if (made != null) return made;
+    final lock = _pointerLockGiven ?? PointerLock.instance;
+    _pointerLock = lock;
+    _pointerLockFeed = attachRawMouse(lock.deltas, relative: lock.locked);
+    return lock;
+  }
+
+  final PointerLock? _pointerLockGiven;
+  PointerLock? _pointerLock;
+  InputSubscription? _pointerLockFeed;
+
+  /// Takes hold of [pointerLock] for a press on the game, if
+  /// [lockPointerOnClick] says so and it does not hold already. What
+  /// `GameWidget` and the editor's play-test call.
+  void lockPointerForClick() {
+    if (!lockPointerOnClick) return;
+    final lock = pointerLock;
+    if (lock.isSupported && !lock.isRequested) unawaited(lock.lock());
+  }
+
+  /// Lets [pointerLock] go, if it was ever used: an editor's Stop or Pause.
+  Future<void> releasePointer() async => _pointerLock?.unlock();
 
   // --- Gamepads ------------------------------------------------------------
 
@@ -347,6 +422,13 @@ class InputService {
 
   void dispose() {
     players.stop();
+    // The lock is the app's: let go of it, but leave it for the next service.
+    unawaited(releasePointer());
+    _pointerLockFeed?.cancel();
+    _pointerLockFeed = null;
+    for (final s in [..._rawMouse]) {
+      s.cancel();
+    }
     for (final s in _gamepadSubscriptions) {
       s.cancel();
     }

@@ -138,12 +138,14 @@ final class InputControl {
     this._read, {
     this.synthetic = false,
     this.continuous = false,
+    this._total,
   });
 
   final InputDevice device;
   final ControlPath path;
   final ControlValueType type;
   final Offset Function(Object state) _read;
+  final Offset Function(Object state)? _total;
 
   /// Stands for others rather than being a thing of its own: Any key, and
   /// Shift for either Shift key. Listening for a new binding passes these
@@ -169,30 +171,55 @@ final class InputControl {
     return type == ControlValueType.vector2 ? v.distance : v.dx.abs();
   }
 
+  /// Whether it is movement that adds up — a pointer's delta, the wheel —
+  /// so [readTotal] has something to read.
+  bool get accumulates => _total != null;
+
+  /// Everything it has moved since its device was made, added up and never
+  /// reset by an update — the movement between two moments is the
+  /// difference of two reads, however many updates ran between them (see
+  /// `FrameMotion`). Null for a control that is not movement.
+  ///
+  /// Reads the live state by default: a rendered frame wants everything up
+  /// to now.
+  Offset? readTotal({bool live = true}) {
+    final total = _total;
+    if (total == null) return null;
+    return total(live ? device.liveState : device.appliedState);
+  }
+
   @override
   String toString() => '$path (${device.deviceId})';
 }
 
 /// Controls for a two-axis value and its parts: `x`, `y` and — unless it is
 /// a position — the four directions, each from 0 to 1.
+///
+/// With [total] — movement that adds up, read by
+/// [InputControl.readTotal] — the value and its `x` and `y` carry their
+/// running totals too. The directions do not: what moved up over a frame is
+/// not a part of where the total ended.
 List<InputControl> vector2Controls(
   InputDevice device,
   String name,
   Offset Function(Object state) read, {
   bool directions = true,
   bool continuous = false,
+  Offset Function(Object state)? total,
 }) {
   ControlPath p(String control) => ControlPath(device.layout, control);
   InputControl axis(
     String part,
     double Function(Offset v) pick,
-    ControlValueType type,
-  ) => InputControl(
+    ControlValueType type, {
+    bool adds = false,
+  }) => InputControl(
     device,
     p('$name/$part'),
     type,
     (s) => Offset(pick(read(s)), 0),
     continuous: continuous,
+    total: adds && total != null ? (s) => Offset(pick(total(s)), 0) : null,
   );
   return [
     InputControl(
@@ -201,9 +228,10 @@ List<InputControl> vector2Controls(
       ControlValueType.vector2,
       read,
       continuous: continuous,
+      total: total,
     ),
-    axis('x', (v) => v.dx, ControlValueType.axis),
-    axis('y', (v) => v.dy, ControlValueType.axis),
+    axis('x', (v) => v.dx, ControlValueType.axis, adds: true),
+    axis('y', (v) => v.dy, ControlValueType.axis, adds: true),
     if (directions) ...[
       axis('up', (v) => v.dy < 0 ? -v.dy : 0, ControlValueType.button),
       axis('down', (v) => v.dy > 0 ? v.dy : 0, ControlValueType.button),
