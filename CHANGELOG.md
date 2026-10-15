@@ -1,3 +1,9 @@
+## [0.1.1] - 2026-10-16
+
+- The pubspec declares all six platforms. pub.dev listed 0.1.0 as Windows only, reading its platforms from the pointer-lock plugin, which is Windows only; the input system is Dart and runs on Android, iOS, Linux, macOS, Windows and the web (JavaScript and WebAssembly). Pointer lock is still Windows only: elsewhere `PointerLock.isSupported` is false and nothing happens. The library's code is unchanged.
+- An example, `example/example.dart`: a dot moved by a `move` action (WASD, the arrow keys or a stick) that bounces on `jump`, from an input asset that passes `validateAsset` (a test keeps it so).
+- just_gamepads package is upgraded to 0.1.1
+
 ## [0.1.0] - 2026-10-04
 
 

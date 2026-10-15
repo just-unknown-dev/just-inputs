@@ -1,6 +1,6 @@
 name: just_inputs
 description: "Input actions for Flutter games: keyboard, mouse, gamepads and touch, with local multiplayer, player rebinding and on-screen controls."
-version: 0.1.0
+version: 0.1.1
 homepage: https://engine.justunknown.com/
 repository: https://github.com/just-unknown-dev/just-inputs
 issue_tracker: https://github.com/just-unknown-dev/just-inputs/issues
@@ -11,6 +11,17 @@ topics:
   - gamedev
   - game
 
+# Declared, so pub.dev does not take the platforms from the plugin below
+# (Windows only, for pointer lock): the input system is Dart and runs on all
+# six; elsewhere pointer lock reports "not supported".
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  windows:
+  web:
+
 environment:
   # Dart 3.12 for private named initializing formals (InputActions,
   # RebindingOperation). Flutter 3.44 is the first stable release with it.
@@ -20,7 +31,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  just_gamepads: ^0.1.0
+  just_gamepads: ^0.1.1
 
 dev_dependencies:
   flutter_test:
